@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vouliagmeni Food Guide — Matt &amp; Dad</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  /* ── DESIGN TOKENS ───────────────────────────────────────────── */
+  :root {
+    --ink: #1a1614;
+    --paper: #f5f0e8;
+    --cream: #ede7d6;
+    --red: #1c5d8c;         /* primary accent — Aegean blue          */
+    --gold: #c9a227;        /* header accent — olive gold            */
+    --muted: #7a7062;       /* secondary text, card notes            */
+    --border: #d4c9b0;      /* grid lines, card borders              */
+    --detour: #1a4a2e;      /* detour section accent (green)         */
+    /* ── TO RETHEME: swap --red and --gold for the destination ─── */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: 'DM Sans', sans-serif; font-weight: 300; line-height: 1.6; }
+
+  /* ── HEADER ──────────────────────────────────────────────────── */
+  .header { background: var(--ink); color: var(--paper); padding: 60px 40px 50px; position: relative; overflow: hidden; }
+  .header::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(45deg, transparent, transparent 40px, rgba(255,255,255,0.015) 40px, rgba(255,255,255,0.015) 41px); }
+  .header-inner { max-width: 900px; margin: 0 auto; position: relative; }
+  .header-tag { font-weight: 500; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+  .header h1 { font-family: 'Playfair Display', serif; font-size: clamp(42px, 7vw, 80px); font-weight: 900; line-height: 0.95; letter-spacing: -2px; margin-bottom: 20px; }
+  .header h1 em { font-style: italic; font-weight: 400; color: var(--gold); }
+  .header-sub { font-size: 14px; color: rgba(245,240,232,0.6); font-weight: 300; letter-spacing: 0.05em; }
+  .header-meta { display: flex; gap: 32px; margin-top: 36px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.12); flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 4px; }
+  .meta-label { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(245,240,232,0.4); }
+  .meta-val { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--paper); }
+
+  /* ── CRITERIA BAR ────────────────────────────────────────────── */
+  .criteria-bar { background: var(--red); padding: 14px 40px; }
+  .criteria-inner { max-width: 900px; margin: 0 auto; display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
+  .crit { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.04em; }
+  .crit-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.6); flex-shrink: 0; }
+
+  /* ── MAIN LAYOUT ─────────────────────────────────────────────── */
+  .main { max-width: 900px; margin: 0 auto; padding: 0 40px 80px; }
+
+  /* ── SECTION ─────────────────────────────────────────────────── */
+  /* One section per destination / neighbourhood / day */
+  .section { margin-top: 60px; }
+  .section-header { display: flex; align-items: baseline; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid var(--ink); }
+  .section.detour .section-header { border-bottom-color: var(--detour); }
+  .section-day { font-size: 10px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--red); white-space: nowrap; }
+  .section.detour .section-day { color: var(--detour); }
+  .section-title { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .section-note { font-size: 12px; color: var(--muted); font-style: italic; margin-left: auto; white-space: nowrap; }
+
+  /* ── MAP THUMBNAIL ───────────────────────────────────────────── */
+  /* Leaflet map showing the route segment for this section */
+  .section-map { height: 170px; width: 100%; margin: 0 0 1px 0; border: 1px solid var(--border); border-top: none; overflow: hidden; position: relative; }
+  .section-map .leaflet-control-attribution { font-size: 8px !important; padding: 1px 4px !important; background: rgba(255,255,255,0.7) !important; }
+  .section-map .leaflet-control-zoom { display: none !important; }
+  .section-map .leaflet-grab { cursor: default; }
+
+  /* ── SUB-LABEL ───────────────────────────────────────────────── */
+  /* Optional cuisine/category grouping within a section */
+  .sub-label { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin: 36px 0 10px; padding: 11px 16px; background: var(--cream); border-left: 4px solid var(--gold); border-radius: 2px; }
+  .sub-label-main { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+  .sub-label-note { font-size: 11px; font-weight: 400; color: var(--muted); letter-spacing: 0.02em; }
+
+  /* ── CARD GRID ───────────────────────────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 1px; }
+
+  /* ── CARD ────────────────────────────────────────────────────── */
+  /* Each card = one establishment. Wraps in <a> linking to Google Maps place_id */
+  .card { background: var(--paper); position: relative; transition: background 0.15s; display: flex; flex-direction: column; }
+  .card-body { display: block; text-decoration: none; color: inherit; padding: 20px 22px 14px; position: relative; cursor: pointer; transition: background 0.15s; }
+  .card-body:hover { background: var(--cream); }
+  .card-body::after { content: '↗'; position: absolute; top: 14px; right: 14px; font-size: 11px; color: var(--muted); opacity: 0; transition: opacity 0.15s; font-weight: 500; }
+  .card-body:hover::after { opacity: 1; }
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; padding-right: 16px; }
+  .card-name { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; line-height: 1.2; letter-spacing: -0.2px; }
+  .card-badges { display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; }
+  .badge { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 2px; white-space: nowrap; }
+  .badge-price-1 { background: #e8f5e9; color: #2e7d32; }   /* $ — price_level 1  */
+  .badge-price-2 { background: #fff3e0; color: #e65100; }   /* $$ — price_level 2 */
+  .badge-flag { background: var(--ink); color: var(--paper); } /* ⚑ — verify first  */
+  .badge-closed { background:#5b5550; color:#efe9e2; }      /* auto: "Closed today" (from data-closed-days) */
+  .badge-soon { background:#8a6d1f; color:#fff; }            /* auto: "Opens HH:MM" today (from data-open-from) */
+  .card-meta { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .card-stars { font-size: 11px; font-weight: 500; color: var(--gold); letter-spacing: 0.02em; }
+  .card-reviews { font-size: 11px; color: var(--muted); font-weight: 300; }
+  .card-note { font-size: 12px; color: var(--muted); font-weight: 300; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 2px; }
+  .card-actions { display: flex; margin-top: auto; border-top: 1px solid var(--border); }
+  .card-action { flex: 1; text-align: center; padding: 9px 8px; font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-decoration: none; transition: background 0.15s, color 0.15s; }
+  .card-action + .card-action { border-left: 1px solid var(--border); }
+  .card-action:hover { background: var(--cream); color: var(--ink); }
+
+  /* ── STANDOUT CARD ───────────────────────────────────────────── */
+  /* Add class="card standout" for top picks */
+  .card.standout { background: var(--ink); color: var(--paper); }
+  .card.standout .card-name { color: var(--paper); }
+  .card.standout .card-reviews { color: rgba(245,240,232,0.5); }
+  .card.standout .card-stars { color: var(--gold); }
+  .card.standout .card-note { color: rgba(245,240,232,0.6); border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-body:hover { background: #2a2420; }
+  .card.standout .badge-price-1 { background: rgba(46,125,50,0.3); color: #a5d6a7; }
+  .card.standout .badge-price-2 { background: rgba(230,81,0,0.3); color: #ffcc80; }
+  .card.standout .badge-flag { background: rgba(255,255,255,0.15); color: var(--paper); }
+  .card.standout .badge-closed { background: rgba(255,255,255,0.18); color: var(--paper); }
+  .card.standout .badge-soon { background: rgba(230,180,40,0.3); color:#ffe6a3; }
+  .card.standout .card-body::after { color: rgba(245,240,232,0.4); }
+  .card.standout .card-actions { border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-action { color: rgba(245,240,232,0.55); }
+  .card.standout .card-action + .card-action { border-color: rgba(255,255,255,0.12); }
+  .card.standout .card-action:hover { background: #2a2420; color: var(--paper); }
+
+  /* ── DETOUR SECTION ──────────────────────────────────────────── */
+  /* Add class="section detour" for off-route stops */
+  .section.detour .card.standout { background: var(--detour); }
+  .section.detour .card.standout .card-body:hover { background: #0f2e1a; }
+
+  /* ── SHORTLIST ("If you only do three") ──────────────────────── */
+  /* Optional dark box at the top of a section listing the 1–3 must-hits. Each item is a tappable Maps link. */
+  .toppick { margin: 0 0 6px; padding: 16px 18px; background: var(--ink); border-radius: 3px; }
+  .toppick-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 12px; }
+  .toppick-list { display: flex; flex-direction: column; gap: 9px; }
+  .toppick-item { display: block; text-decoration: none; color: var(--paper); line-height: 1.35; }
+  .toppick-item .tp-name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15px; }
+  .toppick-item .tp-name::after { content: ' ↗'; font-size: 10px; color: rgba(245,240,232,0.4); }
+  .toppick-item .tp-why { display: block; font-size: 12px; color: rgba(245,240,232,0.6); font-weight: 300; }
+  .toppick-item:hover .tp-name { color: var(--gold); }
+
+  /* ── ESSENTIALS ROW (compact category strip) ─────────────────── */
+  /* For non-dinner lists: gelato/coffee/aperitivo/picnic ("Beyond Dinner") or hut lunches ("On the Mountain"). */
+  /* Each row is a tappable <a> to a Maps place_id; ess-tag is a short left label (category or zone). */
+  .essentials { background: var(--paper); }
+  .ess-row { display: flex; align-items: baseline; gap: 12px; padding: 13px 22px; border-bottom: 1px solid var(--border); text-decoration: none; color: inherit; transition: background 0.15s; }
+  .ess-row:last-child { border-bottom: none; }
+  .ess-row:hover { background: var(--cream); }
+  .ess-tag { flex-shrink: 0; width: 82px; font-size: 9px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; color: var(--gold); padding-top: 4px; }
+  .ess-content { flex: 1; }
+  .ess-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; line-height: 1.25; }
+  .ess-name::after { content: ' ↗'; font-size: 10px; color: var(--muted); opacity: 0; transition: opacity 0.15s; }
+  .ess-row:hover .ess-name::after { opacity: 1; }
+  .ess-why { font-size: 12px; color: var(--muted); font-weight: 300; line-height: 1.45; margin-top: 3px; }
+
+  /* ── BEFORE-YOU-GO INTRO BOX ─────────────────────────────────── */
+  .intro-box { background: var(--cream); border-left: 3px solid var(--gold); border-radius: 3px; padding: 18px 22px; margin-top: 28px; }
+  .intro-title { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 11px; }
+  .intro-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .intro-list li { font-size: 13px; color: var(--ink); line-height: 1.5; padding-left: 16px; position: relative; }
+  .intro-list li::before { content: '›'; position: absolute; left: 2px; color: var(--gold); font-weight: 700; }
+  .intro-list strong { font-weight: 500; }
+
+  /* ── FOOTER ──────────────────────────────────────────────────── */
+  .footer { background: var(--ink); color: var(--paper); padding: 40px; margin-top: 80px; }
+  .footer-inner { max-width: 900px; margin: 0 auto; }
+  .footer-title { font-family: 'Playfair Display', serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--gold); }
+  .legend { display: flex; gap: 32px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: rgba(245,240,232,0.7); }
+  .footer-note { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: rgba(245,240,232,0.35); line-height: 1.6; }
+
+  @media (max-width: 600px) {
+    .header, .criteria-bar, .main, .footer { padding-left: 24px; padding-right: 24px; }
+    .header-meta { gap: 20px; }
+    .grid { grid-template-columns: 1fr; }
+    .section-note { display: none; }
+    .section-map { height: 140px; }
+  }
+
+  /* ── FILTER BAR (auto-builds area buttons from [data-area]; hides if 1 area) ── */
+  .filterbar{position:sticky;top:0;z-index:50;background:var(--paper);border-bottom:1px solid var(--border);transition:transform .25s ease;}
+  .filterbar.fb-hidden{transform:translateY(-110%);}
+  .fb-inner{max-width:900px;margin:0 auto;padding:9px 16px;display:flex;flex-direction:column;gap:7px;}
+  .fb-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+  .fb-btn{font-size:12px;font-weight:600;letter-spacing:.03em;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer;-webkit-tap-highlight-color:transparent;line-height:1;}
+  .fb-btn:hover{border-color:var(--ink);}
+  .fb-btn.active{background:var(--red);border-color:var(--red);color:#fff;}
+  .fb-count{margin-left:auto;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+</style>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1c5d8c">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="header-tag">Matt &amp; His Father — Vouliagmeni</div>
+    <h1>Where to<br><em>Eat</em> in Vouliagmeni</h1>
+    <div class="header-sub">A resident's rotation, not a visitor's checklist · Click any card to open in Google Maps</div>
+    <div class="header-meta">
+      <div class="meta-item"><span class="meta-label">Stops</span><span class="meta-val">37</span></div>
+      <div class="meta-item"><span class="meta-label">Min. Reviews</span><span class="meta-val">150</span></div>
+      <div class="meta-item"><span class="meta-label">Min. Rating</span><span class="meta-val">4.0★</span></div>
+      <div class="meta-item"><span class="meta-label">Michelin rooms</span><span class="meta-val">7</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="criteria-bar">
+  <div class="criteria-inner">
+    <div class="crit"><div class="crit-dot"></div>$ = everyday · $$ = occasion</div>
+    <div class="crit"><div class="crit-dot"></div>Dark card = standout pick</div>
+    <div class="crit"><div class="crit-dot"></div>⚑ = verify price or hours first</div>
+    <div class="crit"><div class="crit-dot"></div>Sorted by stars within each group</div>
+  </div>
+</div>
+
+<main class="main">
+
+<div class="intro-box">
+  <div class="intro-title">Before you go</div>
+  <ul class="intro-list">
+    <li><strong>Both starred rooms are dark Sunday and Monday.</strong> Patio and Pelagos serve 7:00–10:30pm only, five nights a week. They are structurally occasion restaurants — neither can ever be the default. Book Pelagos weeks ahead.</li>
+    <li><strong>Tasting menus need allergen notice at booking, not on arrival.</strong> Confirmed: no restrictions for either diner. If that ever changes, tell them when you reserve.</li>
+    <li><strong>Greek meal times.</strong> Lunch runs 1:00–4:00pm, dinner rarely before 9:00pm. The magirio at O Charis is lunch-only and closes at 5:15pm sharp.</li>
+    <li><strong>The 500-review floor was lowered to 150 for this guide.</strong> A resident can afford a miss; a tourist with three dinners cannot. Three of the best finds here have under 300 reviews.</li>
+    <li><strong>Everything is tappable</strong> &rarr; opens in Google Maps, with Directions and Call on each card.</li>
+  </ul>
+</div>
+
+<div id="filterbar" class="filterbar">
+  <div class="fb-inner">
+    <div class="fb-row" id="fbCities"></div>
+    <div class="fb-row" id="fbCuisines"></div>
+    <div class="fb-row">
+      <button class="fb-btn fb-price" data-price="1">$</button>
+      <button class="fb-btn fb-price" data-price="2">$$</button>
+      <button class="fb-btn fb-healthy" data-healthy="1">🌿 Healthy</button>
+      <span class="fb-count" id="fbCount"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SECTION 1 — THE ROTATION ═══ -->
+<section class="section" data-area="rotation">
+  <div class="section-header">
+    <span class="section-day">Weeknight</span>
+    <h2 class="section-title">The Rotation</h2>
+    <span class="section-note">Walk in, no ceremony, go again next week</span>
+  </div>
+  <div class="section-map" id="map-rotation"></div>
+
+  <div class="toppick">
+    <div class="toppick-label">If you only do three</div>
+    <div class="toppick-list">
+      <a class="toppick-item" href="https://www.google.com/maps/search/?api=1&query=%CE%A4%CE%BF%20%CE%92%CE%BF%CF%85%CE%BB%CE%B9%CF%8E%CF%84%CE%B9%CE%BA%CE%BF%20%CE%9C%CE%B5%CE%B6%CE%B5%CE%B4%CE%BF%CF%80%CF%89%CE%BB%CE%B5%CE%AF%CE%BF&query_place_id=ChIJB3E9Z8mVoRQRLDXOJ4aRVJs" target="_blank" rel="noopener"><span class="tp-name">Το Βουλιώτικο Μεζεδοπωλείο</span><span class="tp-why">Highest-rated table on the Riviera. Quiet street, easy parking.</span></a>
+      <a class="toppick-item" href="https://www.google.com/maps/search/?api=1&query=Garbi%20Restaurant&query_place_id=ChIJg5LpoVOVoRQRmGVwgEU5DwY" target="_blank" rel="noopener"><span class="tp-name">Garbi</span><span class="tp-why">Open 12 hours a day, every day. The default seafood answer.</span></a>
+      <a class="toppick-item" href="https://www.google.com/maps/search/?api=1&query=%CE%95%CF%83%CF%84%CE%B9%CE%B1%CF%84%CF%8C%CF%81%CE%B9%CE%BF%20%CE%9F%20%CE%A7%CE%91%CE%A1%CE%97%CE%A3&query_place_id=ChIJMRRILC2VoRQRYSt3Fcbi9Xo" target="_blank" rel="noopener"><span class="tp-name">Ο ΧΑΡΗΣ</span><span class="tp-why">Lunch-only magirio. Point at the pots. Closed Sun + Mon.</span></a>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card standout" data-price="1" data-healthy="1" data-cuisine="greek" data-closed-days="1" data-open-from="13:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=%CE%A4%CE%BF%20%CE%92%CE%BF%CF%85%CE%BB%CE%B9%CF%8E%CF%84%CE%B9%CE%BA%CE%BF%20%CE%9C%CE%B5%CE%B6%CE%B5%CE%B4%CE%BF%CF%80%CF%89%CE%BB%CE%B5%CE%AF%CE%BF&query_place_id=ChIJB3E9Z8mVoRQRLDXOJ4aRVJs" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Το Βουλιώτικο Μεζεδοπωλείο</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">205 reviews</span>
+        </div>
+        <div class="card-note">Meze house in Voula, only findable in Greek. Octopus, cured prawns, spicy cheese and cod. Called "one of the best in the Voula and Glyfada area" by a regular. Quiet area, parking is easy. Under 500 reviews — flagged, not doubted.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=%CE%A4%CE%BF%20%CE%92%CE%BF%CF%85%CE%BB%CE%B9%CF%8E%CF%84%CE%B9%CE%BA%CE%BF%20%CE%9C%CE%B5%CE%B6%CE%B5%CE%B4%CE%BF%CF%80%CF%89%CE%BB%CE%B5%CE%AF%CE%BF&destination_place_id=ChIJB3E9Z8mVoRQRLDXOJ4aRVJs" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302110017730">Call</a>
+      </div>
+    </div>
+
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="seafood" data-open-from="12:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Garbi%20Restaurant&query_place_id=ChIJg5LpoVOVoRQRmGVwgEU5DwY" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Garbi</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">2,333 reviews</span>
+        </div>
+        <div class="card-note">Open 12:30pm to 12:30am, seven days. Grilled grouper, velvet fish soup with cod, sea bass carpaccio. Repeat-customer language runs through the reviews — the signature of a place locals actually use, not a sunset trap.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Garbi%20Restaurant&destination_place_id=ChIJg5LpoVOVoRQRmGVwgEU5DwY" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108963480">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood" data-closed-days="1,2" data-open-from="18:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=%CF%84%CE%BF%20%CE%A8%CE%B1%CF%81%CE%BF%CF%80%CE%BF%CF%8D%CE%BB%CE%B9&query_place_id=ChIJn-TsjE-VoRQRLJm61qz5Syk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">το Ψαροπούλι</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">158 reviews</span>
+        </div>
+        <div class="card-note">Tiny Voula fish house. Red mullet ceviche, grouper steamed with olive oil and lemon. Pavlos owns it and hosts. Booking essential on weekends — the room is small and gets loud. Closed Mon + Tue.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=%CF%84%CE%BF%20%CE%A8%CE%B1%CF%81%CE%BF%CF%80%CE%BF%CF%8D%CE%BB%CE%B9&destination_place_id=ChIJn-TsjE-VoRQRLJm61qz5Syk" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108953986">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="grill" data-open-from="12:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=TYLIXTO%20VOULIAGMENI&query_place_id=ChIJa-zvXbfqoRQRhRv3eNYmLRo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Tylixto</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">1,726 reviews</span>
+        </div>
+        <div class="card-note">The souvlaki answer, on the seaside walk. Gyros, halloumi wrap, spinach-cheese pie with honey. Front veranda faces the water. Ermina owns it. Noon to midnight daily. Loud street — sit inside if you want to talk.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=TYLIXTO%20VOULIAGMENI&destination_place_id=ChIJa-zvXbfqoRQRhRv3eNYmLRo" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108960030">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="seafood" data-open-from="12:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Panorama&query_place_id=ChIJdaxFlVOVoRQR7Gr2VAuaDR8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Panorama</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">1,837 reviews</span>
+        </div>
+        <div class="card-note">At the water's edge in Kavouri. They let you walk back and pick your own fish before it's cooked. Weekday lunch is quiet — front-row sea view without a booking. Parking, rare here, is easy.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Panorama&destination_place_id=ChIJdaxFlVOVoRQR7Gr2VAuaDR8" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108951298">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="greek">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Louizidis%20Vouliagmeni&query_place_id=ChIJX0j0FLfqoRQR6BOYD3wlfsk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Louizidis</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">2,166 reviews</span>
+        </div>
+        <div class="card-note">A Greek regular says he comes here for birthdays and namedays; the fish soup gets named repeatedly. But the bad reviews are specific and ugly — dirty cutlery, forgotten orders. Google publishes no opening hours at all. Walk past before committing.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Louizidis%20Vouliagmeni&destination_place_id=ChIJX0j0FLfqoRQR6BOYD3wlfsk" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108960591">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="grill" data-open-from="12:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=%CE%9F%20%CE%A4%CE%AC%CE%BA%CE%B7%CF%82%20%CE%9A%CE%B5%CE%BC%CF%80%CE%B1%CF%80%CF%84%CE%B6%CE%AF%CE%B4%CE%B9%CE%BA%CE%BF%CE%BD&query_place_id=ChIJyfbr4LnqoRQRPIAd0aNQ6Qw" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Ο Τάκης Κεμπαπτζίδικον</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.1</span>
+          <span class="card-reviews">620 reviews</span>
+        </div>
+        <div class="card-note">Kebab house open until 1:30am, seven days. Kebab giaourtlou, bifteki, grilled halloumi. Street parking only. The late-night option when the kitchens have shut.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=%CE%9F%20%CE%A4%CE%AC%CE%BA%CE%B7%CF%82%20%CE%9A%CE%B5%CE%BC%CF%80%CE%B1%CF%80%CF%84%CE%B6%CE%AF%CE%B4%CE%B9%CE%BA%CE%BF%CE%BD&destination_place_id=ChIJyfbr4LnqoRQRPIAd0aNQ6Qw" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108900200">Call</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sub-label"><span class="sub-label-main">Lunch Only</span><span class="sub-label-note">the magirio — home cooking, gone by 5:15pm</span></div>
+  <div class="grid">
+
+    <div class="card standout" data-price="1" data-healthy="1" data-cuisine="greek" data-closed-days="0,1" data-open-from="12:15">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=%CE%95%CF%83%CF%84%CE%B9%CE%B1%CF%84%CF%8C%CF%81%CE%B9%CE%BF%20%CE%9F%20%CE%A7%CE%91%CE%A1%CE%97%CE%A3&query_place_id=ChIJMRRILC2VoRQRYSt3Fcbi9Xo" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Εστιατόριο "Ο ΧΑΡΗΣ"</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">259 reviews</span>
+        </div>
+        <div class="card-note">A true magirio in Vari: you walk to the kitchen and point at whatever was cooked that morning. Vasilis is the father, Harris the son — let Vasilis order for you. Tuesday to Saturday, 12:15 to 5:15pm. Closed Sunday and Monday. The single best find in this guide.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=%CE%95%CF%83%CF%84%CE%B9%CE%B1%CF%84%CF%8C%CF%81%CE%B9%CE%BF%20%CE%9F%20%CE%A7%CE%91%CE%A1%CE%97%CE%A3&destination_place_id=ChIJMRRILC2VoRQRYSt3Fcbi9Xo" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108974394">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ SECTION 2 — THE OCCASION ═══ -->
+<section class="section" data-area="occasion">
+  <div class="section-header">
+    <span class="section-day">Book Ahead</span>
+    <h2 class="section-title">The Occasion</h2>
+    <span class="section-note">Both dark Sun + Mon · 7:00–10:30pm only</span>
+  </div>
+  <div class="section-map" id="map-occasion"></div>
+  <div class="grid">
+
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-closed-days="0,1" data-open-from="19:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Pelagos&query_place_id=ChIJYT2q81TroRQRkJ2kcTN5qLc" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Pelagos ★</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">244 reviews</span>
+        </div>
+        <div class="card-note">One Michelin star, inside the Four Seasons Astir Palace. Chef Luca Piscazzi. Three tasting menus plus à la carte; the pomodoro and the pasta with caviar get named again and again. One diner who has eaten at both preferred it to Delta, Greece's only two-star. The stronger of the two starred rooms on the evidence.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Pelagos&destination_place_id=ChIJYT2q81TroRQRkJ2kcTN5qLc" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108901192">Call</a>
+      </div>
+    </div>
+
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-closed-days="0,1" data-open-from="19:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Patio%20at%20The%20Margi&query_place_id=ChIJUyfI9a_qoRQRRXvofx5C8ys" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Patio at The Margi ★ 🌿</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">43 reviews</span>
+        </div>
+        <div class="card-note">One Michelin star and one of only three Green Stars in Greece. Chef Panagiotis Giakalis; produce comes from the hotel's own farm. Nine courses, chef serves some dishes himself. Only 43 reviews — a small, low-volume room. The rating is thin, not wrong. Go because you live here.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Patio%20at%20The%20Margi&destination_place_id=ChIJUyfI9a_qoRQRRXvofx5C8ys" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108929160">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ SECTION 3 — WHEN GUESTS VISIT ═══ -->
+<section class="section" data-area="guests">
+  <div class="section-header">
+    <span class="section-day">Sunset</span>
+    <h2 class="section-title">When Guests Visit</h2>
+    <span class="section-note">Seafront, view-first, valet — bring the visiting family</span>
+  </div>
+  <div class="section-map" id="map-guests"></div>
+  <div class="grid">
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="seafood" data-open-from="13:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=BlueFish%20Vouliagmeni&query_place_id=ChIJgYa0U7fqoRQRZINKrouaRoc" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">BlueFish</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">1,941 reviews</span>
+        </div>
+        <div class="card-note">Octopus, taramasalata, sea bass carpaccio, swordfish pasta. Good wine list. Two warnings from reviewers: the terrace permits cigars, and a sea-view table is not guaranteed by a reservation note. Ask when you book.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=BlueFish%20Vouliagmeni&destination_place_id=ChIJgYa0U7fqoRQRZINKrouaRoc" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109671778">Call</a>
+      </div>
+    </div>
+
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="seafood" data-open-from="13:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Labros%20Restaurant&query_place_id=ChIJd2cFGrnqoRQRZyIoLbtzd_M" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Labros</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">3,527 reviews</span>
+        </div>
+        <div class="card-note">Open since 1889 — among the oldest continuously running restaurants in Greece. Grilled calamari, fried barbouni, fish soup, marinated anchovies. Valet, sunset over the bay. High review volume here is tourist volume; that is exactly what makes it the right room for visiting family.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Labros%20Restaurant&destination_place_id=ChIJd2cFGrnqoRQRZyIoLbtzd_M" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108960144">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Sardelaki%20me%20Thea&query_place_id=ChIJe1hpFbnqoRQRd-7er2mJS-Q" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Sardelaki me Thea</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">6,769 reviews</span>
+        </div>
+        <div class="card-note">Nine in the morning to midnight, every day. They bring the appetiser tray to the table and you choose. Grilled mackerel, tarama, spaghetti marinara. Reviewers are consistent on one point: avoid it on a Sunday, when the service collapses under the crowd.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Sardelaki%20me%20Thea&destination_place_id=ChIJe1hpFbnqoRQRd-7er2mJS-Q" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109670913">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood" data-open-from="12:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Yalos%20Seafood&query_place_id=ChIJPTCfvFOVoRQRhledef6izGQ" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Yalos Seafood</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">1,096 reviews</span>
+        </div>
+        <div class="card-note">Kavouri seafront next to Garbi. Marinated anchovies, tuna tartare, seafood platter, fried feta with rose jam. Service runs inconsistent when it fills up — mains have arrived cold. Best on a quiet weekday.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Yalos%20Seafood&destination_place_id=ChIJPTCfvFOVoRQRhledef6izGQ" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108952555">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ SECTION 4 — WORTH THE DRIVE (GLYFADA) ═══ -->
+<section class="section" data-area="glyfada">
+  <div class="section-header">
+    <span class="section-day">~15 min north</span>
+    <h2 class="section-title">Glyfada</h2>
+    <span class="section-note">Where the Riviera goes when it wants something other than fish</span>
+  </div>
+  <div class="section-map" id="map-glyfada"></div>
+  <div class="grid">
+
+    <div class="card standout" data-price="1" data-healthy="0" data-cuisine="italian" data-closed-days="1" data-open-from="19:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=La%20Casa%20Di%20Giorgino&query_place_id=ChIJ3Y2Hvs2_oRQRsrddM3DCqL8" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">La Casa Di Giorgino</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">4,186 reviews</span>
+        </div>
+        <div class="card-note">The highest-rated room in this entire guide, Michelin included. Spaghetti alle vongole, pesto, prosciutto pizza. Complimentary bruschetta and focaccia to start. Portions are large enough to share — ask before you over-order. Closed Monday.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=La%20Casa%20Di%20Giorgino&destination_place_id=ChIJ3Y2Hvs2_oRQRsrddM3DCqL8" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109638771">Call</a>
+      </div>
+    </div>
+
+    <div class="card standout" data-price="1" data-healthy="0" data-cuisine="greek" data-open-from="16:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=PASIPHAE&query_place_id=ChIJp3m5ndq_oRQR-aZUPQYEgys" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Pasiphae</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">4,914 reviews</span>
+        </div>
+        <div class="card-note">Cretan, family-run for 26 years, olive oil and honey from their own farm. Dakos, staka, stuffed zucchini flowers, lamb. Raki before and after, desserts complimentary. Two people ate three starters, two mains and a bottle of wine for €110. Reserve — it is always full.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=PASIPHAE&destination_place_id=ChIJp3m5ndq_oRQR-aZUPQYEgys" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109944024">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="grill" data-closed-days="1" data-open-from="19:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=MANTRI%20Mountain%20Resto&query_place_id=ChIJq2C9AQaWoRQRuVCxyiDVfuM" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Mantri Mountain Resto</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">6,278 reviews</span>
+        </div>
+        <div class="card-note">Up a bumpy road into Ano Glyfada, looking back down over the coast. Lamb, beef carpaccio, an aged ribeye big enough for two. Plenty of parking. Full on a Tuesday — reserve. Gets loud when busy. Closed Monday.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=MANTRI%20Mountain%20Resto&destination_place_id=ChIJq2C9AQaWoRQRuVCxyiDVfuM" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109623071">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="greek" data-open-from="13:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=To%20Drami&query_place_id=ChIJ8w7q5NO_oRQRpkV-21EGUrY" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">To Drami</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">3,956 reviews</span>
+        </div>
+        <div class="card-note">Small-plates meze in a quiet pocket of boutiques, far enough off the strip to escape the tourist rooms. The fava with sausage and caramelised onion is the dish people come back for. Reserve on weekends. It gets loud.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=To%20Drami&destination_place_id=ChIJ8w7q5NO_oRQRpkV-21EGUrY" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108944959">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-open-from="18:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Feed%C3%A9l%20Asador&query_place_id=ChIJB45FrM2_oRQRDnNMIjXX4fI" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Feedel Asador</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">4,228 reviews</span>
+        </div>
+        <div class="card-note">Around €50 a head. Seasonal menu, Greek dishes rebuilt — beetroot salad with goat cheese, giant beans reworked. Everything is meant to be shared. Parking is easy, which in Athens is its own argument.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Feed%C3%A9l%20Asador&destination_place_id=ChIJB45FrM2_oRQRDnNMIjXX4fI" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108980066">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="greek" data-open-from="12:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=The%20Greek&query_place_id=ChIJ32ZbMdC_oRQReZIS0AKgnhM" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">The Greek</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">2,259 reviews</span>
+        </div>
+        <div class="card-note">Very large menu, unusually deep on vegetarian dishes for a Greek room. Fried calamari, filo feta, courgette. Walk-ins get seated. Cheap for what it is.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=The%20Greek&destination_place_id=ChIJ32ZbMdC_oRQReZIS0AKgnhM" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108941471">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ SECTION 5 — VARKIZA / VARI ═══ -->
+<section class="section" data-area="varkiza">
+  <div class="section-header">
+    <span class="section-day">~10 min east</span>
+    <h2 class="section-title">Varkiza &amp; Vari</h2>
+    <span class="section-note">Cheaper, calmer, fewer valets</span>
+  </div>
+  <div class="section-map" id="map-varkiza"></div>
+  <div class="grid">
+
+    <div class="card standout" data-price="1" data-healthy="0" data-cuisine="grill" data-open-from="17:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Bavaria%20Varkiza&query_place_id=ChIJyQ8-qIeVoRQRLCE0-_b6wV0" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Bavaria</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">591 reviews</span>
+        </div>
+        <div class="card-note">Nothing German about it despite the name — a grill taverna five minutes off the beach, under a vine pergola. Called the best restaurant in the area by a regular. Certain dishes run only on certain days because they need preparing ahead. Ask what those are.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Bavaria%20Varkiza&destination_place_id=ChIJyQ8-qIeVoRQRLCE0-_b6wV0" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108973383">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Kastelorizo&query_place_id=ChIJRcUbmjjroRQRPoVwFGlMyrc" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Kastelorizo</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span><span class="badge badge-flag">⚑</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">2,048 reviews</span>
+        </div>
+        <div class="card-note">Warm towel at the end of lunch, plates changed mid-meal, water topped constantly — the service is the draw. Grilled octopus and fish soup are strong. One reviewer reports a waiter conceding some seafood is frozen. Ask which is fresh before ordering.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Kastelorizo&destination_place_id=ChIJRcUbmjjroRQRPoVwFGlMyrc" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109655022">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Latini&query_place_id=ChIJiXeczKukoRQRLXRBO9Nfjsk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Latini</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.3</span>
+          <span class="card-reviews">2,024 reviews</span>
+        </div>
+        <div class="card-note">On Vari Bay, nine in the morning to one in the morning. Waiter brings the fresh catch on a tray and you pick. King crab if it's in. Portions run small against the price — order accordingly. Parking on site.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Latini&destination_place_id=ChIJiXeczKukoRQRLXRBO9Nfjsk" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109655977">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="1" data-cuisine="seafood" data-open-from="12:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Aperando%20Galazio%20-%20NAOBB&query_place_id=ChIJbTSRqWE0XhMR8c9Si7J_JcQ" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Aperando Galazio</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.2</span>
+          <span class="card-reviews">4,588 reviews</span>
+        </div>
+        <div class="card-note">Feet in the gravel at the water's edge on Varkiza's east beach, surfers and yachts in front of you. Grigoris hosts. Book ahead in summer. Sit inside if there are flies about — reviewers mention them outside.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Aperando%20Galazio%20-%20NAOBB&destination_place_id=ChIJbTSRqWE0XhMR8c9Si7J_JcQ" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109655951">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ DETOUR — ATHENS STARRED ═══ -->
+<section class="section detour" data-area="athens">
+  <div class="section-header">
+    <span class="section-day">Detour</span>
+    <h2 class="section-title">Central Athens</h2>
+    <span class="section-note">~25–30km · the full starred constellation · a few times a year</span>
+  </div>
+  <div class="section-map" id="map-athens"></div>
+
+  <div class="sub-label"><span class="sub-label-main">Michelin, Athens</span><span class="sub-label-note">12 starred rooms exist in Greece — all of them are here. 2026 selection still pending.</span></div>
+
+  <div class="grid">
+
+    <div class="card standout" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-closed-days="0" data-open-from="18:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Soil%20restaurant&query_place_id=ChIJr9_aRfm9oRQRWj0x3vCftJE" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Soil ★ 🌿</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.8</span>
+          <span class="card-reviews">1,428 reviews</span>
+        </div>
+        <div class="card-note">One star, one Green Star. Chef Mantis trained at Hof Van Cleve, Geranium and the Fat Duck. Tasting menu around €110; herbs and flowers come from their own ground. Spread over several floors past an open kitchen. Tables on the first floor sit close together. Closed Sunday.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Soil%20restaurant&destination_place_id=ChIJr9_aRfm9oRQRWj0x3vCftJE" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302107513505">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-closed-days="0,1" data-open-from="19:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=CTC%20Urban%20Gastronomy&query_place_id=ChIJ9WOIj1y9oRQRlzRu3DA1rHw" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">CTC Urban Gastronomy ★</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.7</span>
+          <span class="card-reviews">1,411 reviews</span>
+        </div>
+        <div class="card-note">Twelve-course surprise menu with a Greek wine pairing, around €95 — the best value at this level in the city. Calamari "pasta", ceviche with kiwi. Service runs four and a half to five hours. Pacing has been criticised. Closed Sun + Mon.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=CTC%20Urban%20Gastronomy&destination_place_id=ChIJ9WOIj1y9oRQRlzRu3DA1rHw" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302107228812">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-open-from="18:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Makris%20Athens%20Fine%20Dining%20Restaurant&query_place_id=ChIJbSeMEYC9oRQR6v8p_yhQWOk" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Makris ★</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">551 reviews</span>
+        </div>
+        <div class="card-note">Glass floor over Roman ruins in Thisio. The Utopia tasting menu; produce and herbs from chef Petros Dimas's family farm near ancient Corinth. Theatrical — dry ice, table poetry. Arrive willing to be entertained. The wine list draws complaints for its markup.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Makris%20Athens%20Fine%20Dining%20Restaurant&destination_place_id=ChIJbSeMEYC9oRQR6v8p_yhQWOk" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302160047777">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-open-from="19:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Spondi%20Restaurant&query_place_id=ChIJ87zFe2y9oRQR_ryfDQ9QfNI" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Spondi ★</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">1,419 reviews</span>
+        </div>
+        <div class="card-note">Greece's first Michelin star, awarded 2002. In Pangrati, walking distance from Soil. French-leaning: foie gras with sorbet, monkfish, pigeon. A candle made of thyme-seasoned pork fat that you eat. Open seven nights, which none of the others manage.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Spondi%20Restaurant&destination_place_id=ChIJ87zFe2y9oRQR_ryfDQ9QfNI" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302107564021">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="2" data-healthy="1" data-cuisine="mediterranean" data-closed-days="1,2" data-open-from="18:30">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Delta%20Restaurant&query_place_id=ChIJPSgVfVa9oRQRwZ4mJ5kITvQ" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Delta ★★ 🌿</div>
+          <div class="card-badges"><span class="badge badge-price-2">$$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.4</span>
+          <span class="card-reviews">677 reviews</span>
+        </div>
+        <div class="card-note">The only two-star restaurant in Greece, at the Stavros Niarchos centre. Twelve courses of dishes disguised as other dishes; heavy fermentation. Chefs Papazacharias and Feskos came through Maaemo and Under. Note the dissent: some find the room feels like an office lobby in daylight, and at least one diner who has eaten both preferred Pelagos. Closed Mon + Tue.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Delta%20Restaurant&destination_place_id=ChIJPSgVfVa9oRQRwZ4mJ5kITvQ" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+306986657553">Call</a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══ SECTION 6 — BEYOND DINNER ═══ -->
+<section class="section" data-area="beyond">
+  <div class="section-header">
+    <span class="section-day">Daily</span>
+    <h2 class="section-title">Beyond Dinner</h2>
+    <span class="section-note">Bakery · coffee · brunch · gelato — all walkable in Vouliagmeni</span>
+  </div>
+  <div class="section-map" id="map-beyond"></div>
+
+  <div class="grid">
+
+    <div class="card standout" data-price="1" data-healthy="0" data-cuisine="cafe">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Artopolis&query_place_id=ChIJX_hMFbfqoRQRM7eQ7JY43ss" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Artopolis</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.3</span>
+          <span class="card-reviews">387 reviews</span>
+        </div>
+        <div class="card-note">Six in the morning to eight at night, every day. Bougatsa, spanakopita, prasopita, freddo cappuccino. One reviewer signs off "from someone who lives here" — which is the entire recommendation. Ask for Panos on the coffee.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Artopolis&destination_place_id=ChIJX_hMFbfqoRQRM7eQ7JY43ss" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109670321">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="cafe">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Tanto%20Cafe&query_place_id=ChIJt7aWALHqoRQRH6h0ZOsP2j4" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Tanto Cafe</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.6</span>
+          <span class="card-reviews">502 reviews</span>
+        </div>
+        <div class="card-note">"Finally a good coffee shop in Vouliagmeni." Owners are behind the counter. Opens at 6:30am. One reviewer finds the espresso over-extracted and bitter; the filter and milk drinks draw no such complaint.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Tanto%20Cafe&destination_place_id=ChIJt7aWALHqoRQRH6h0ZOsP2j4" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108960069">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="cafe">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Sofi%27s&query_place_id=ChIJ65zg5vbroRQRI_Ntn4xnh34" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Sofi's</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.3</span>
+          <span class="card-reviews">838 reviews</span>
+        </div>
+        <div class="card-note">Brunch and baked goods in the centre of Vouliagmeni, bright room, grocery corner attached. Flat white and a breakfast sandwich on sourdough. Closes at 7:30pm — this is a daytime room.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Sofi%27s&destination_place_id=ChIJ65zg5vbroRQRI_Ntn4xnh34" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302109670605">Call</a>
+      </div>
+    </div>
+
+    <div class="card" data-price="1" data-healthy="0" data-cuisine="cafe" data-open-from="10:00">
+      <a class="card-body" href="https://www.google.com/maps/search/?api=1&query=Waffle%20House&query_place_id=ChIJY-vJ37nqoRQRGLS0AgSmW8U" target="_blank" rel="noopener">
+        <div class="card-top">
+          <div class="card-name">Waffle House</div>
+          <div class="card-badges"><span class="badge badge-price-1">$</span></div>
+        </div>
+        <div class="card-meta">
+          <span class="card-stars">★ 4.5</span>
+          <span class="card-reviews">5,258 reviews</span>
+        </div>
+        <div class="card-note">Gelato and waffles with outdoor seating right on the water, open until 1:00am — 2:00am Saturdays. Gets hectic and runs a little expensive. The ice cream is the reason, not the waffles.</div>
+      </a>
+      <div class="card-actions">
+        <a class="card-action" href="https://www.google.com/maps/dir/?api=1&destination=Waffle%20House&destination_place_id=ChIJY-vJ37nqoRQRGLS0AgSmW8U" target="_blank" rel="noopener">Directions</a>
+        <a class="card-action" href="tel:+302108961227">Call</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sub-label"><span class="sub-label-main">Small Rooms</span><span class="sub-label-note">under 150 reviews — included on rating, flagged on volume</span></div>
+  <div class="essentials">
+    <a class="ess-row" href="https://www.google.com/maps/search/?api=1&query=Margipan&query_place_id=ChIJBXJn0szroRQRJNYYv1yKU7k" target="_blank" rel="noopener"><div class="ess-tag">Bakery</div><div class="ess-content"><div class="ess-name">Margipan ⚑</div><div class="ess-why">★ 4.8 · 69 reviews · Chicken pie, tiramisu, chocolate cheesecake. 7:30am–4:30pm daily. One reviewer reports being charged more for speaking English — check the price on the board.</div></div></a>
+    <a class="ess-row" href="https://www.google.com/maps/search/?api=1&query=Solo%20Gelato%20Voula&query_place_id=ChIJQ5AxesmVoRQR2ydirKgfv2E" target="_blank" rel="noopener"><div class="ess-tag">Gelato</div><div class="ess-content"><div class="ess-name">Solo Gelato, Voula ⚑</div><div class="ess-why">★ 4.9 · 30 reviews · Family recipe running since 1951. Open till midnight, 1:00am on weekends. Highest rating in the guide on the smallest sample.</div></div></a>
+    <a class="ess-row" href="https://www.google.com/maps/search/?api=1&query=Mr.Coco%27s%20%26%20More&query_place_id=ChIJvQt_jMXroRQRVhE4NzRz5OE" target="_blank" rel="noopener"><div class="ess-tag">Coffee</div><div class="ess-content"><div class="ess-name">Mr. Coco's &amp; More ⚑</div><div class="ess-why">★ 4.8 · 42 reviews · Hot chocolate at €3.50 while the seafront charges €7. 7:00am–10:00pm daily. The room needs a refresh; the coffee does not.</div></div></a>
+    <a class="ess-row" href="https://www.google.com/maps/search/?api=1&query=%CE%9A%CE%B1%CF%86%CE%B5%CE%BD%CE%B5%CE%AF%CE%BF%20%CE%92%CE%BF%CF%85%CE%BB%CE%B9%CE%B1%CE%B3%CE%BC%CE%AD%CE%BD%CE%B7%CF%82&query_place_id=ChIJBc9DB7HqoRQRr7b36Th2_GU" target="_blank" rel="noopener"><div class="ess-tag">Kafeneio</div><div class="ess-content"><div class="ess-name">Καφενείο Βουλιαγμένης ⚑</div><div class="ess-why">★ 4.4 · 36 reviews · 7:00am to 3:00am, every day. An old-style kafeneio, not a café. The owner will make you a sandwich after closing if she likes you.</div></div></a>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-title">Legend</div>
+    <div class="legend">
+      <div class="legend-item"><span class="badge badge-price-1" style="background:rgba(46,125,50,0.3);color:#a5d6a7;">$</span> Everyday · taverna, meze, grill</div>
+      <div class="legend-item"><span class="badge badge-price-2" style="background:rgba(230,81,0,0.3);color:#ffcc80;">$$</span> Occasion · seafront, fine dining</div>
+      <div class="legend-item"><span class="badge badge-flag">⚑</span> Verify price or hours</div>
+      <div class="legend-item"><span style="width:20px;height:14px;background:#1a1614;display:inline-block;border-radius:2px;"></span> Standout pick</div>
+      <div class="legend-item"><span style="width:20px;height:14px;background:#1a4a2e;display:inline-block;border-radius:2px;"></span> Detour section</div>
+      <div class="legend-item">★ = Michelin star · 🌿 = Michelin Green Star</div>
+    </div>
+    <div class="footer-note">
+      Built for residents, not visitors. All establishments meet 4.0+ stars and 150+ Google Maps reviews — the usual 500 floor was lowered because a resident can absorb a bad meal and a tourist cannot; three of the strongest finds here sit under 300 reviews and are flagged ⚑. Michelin-starred rooms are exempt from the review floor entirely. Michelin data is the December 2024 Athens selection; there was no 2025 update, and the combined Athens/Santorini/Thessaloniki 2026 selection is still unpublished as of July 2026. No Reddit or forum firsthand accounts exist for Vouliagmeni — this list draws on Google and TripAdvisor, which skew toward visitors, partly offset by Greek-language searching. Clicking a card opens Google Maps. Sorted by star rating within each group, then review count. Map tiles © OpenStreetMap contributors.
+    </div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  var STYLE = { color: '#1c5d8c', weight: 3, opacity: 0.85 };
+
+  function makeMap(id, center, zoom, pts) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var m = L.map(id, {
+      center: center, zoom: zoom,
+      zoomControl: false,
+      scrollWheelZoom: false,
+      dragging: false,
+      touchZoom: false,
+      doubleClickZoom: false,
+      keyboard: false,
+      attributionControl: true
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://openstreetmap.org/copyright">OSM</a>',
+      maxZoom: 19
+    }).addTo(m);
+    if (pts && pts.length > 1) {
+      L.polyline(pts, STYLE).addTo(m);
+    }
+    return m;
+  }
+
+  // Rotation: Voula meze -> Kavouri -> Vouliagmeni centre -> Vari magirio
+  var rotation = [
+    [37.8498, 23.7647], // To Vouliotiko Mezedopoleio, Voula
+    [37.8545, 23.7792], // to Psaropouli, Voula
+    [37.8272, 23.7704], // Garbi, Kavouri
+    [37.8280, 23.7702], // Panorama, Kavouri
+    [37.8121, 23.7826], // Tylixto, Vouliagmeni
+    [37.8132, 23.7832], // Louizidis
+    [37.8117, 23.7827], // O Takis
+    [37.8182, 23.8015]  // O Charis, Vari
+  ];
+  makeMap('map-rotation', [37.8300, 23.7800], 12, rotation);
+
+  // Occasion: the two starred rooms
+  var occasion = [
+    [37.8137, 23.7740], // Patio at The Margi
+    [37.8051, 23.7707]  // Pelagos, Four Seasons Astir Palace
+  ];
+  makeMap('map-occasion', [37.8094, 23.7723], 14, occasion);
+
+  // Guests: the Vouliagmeni / Kavouri seafront run
+  var guests = [
+    [37.8124, 23.7814], // BlueFish
+    [37.8090, 23.7823], // Sardelaki me Thea
+    [37.8082, 23.7835], // Labros
+    [37.8274, 23.7705]  // Yalos, Kavouri
+  ];
+  makeMap('map-guests', [37.8180, 23.7770], 13, guests);
+
+  // Glyfada
+  var glyfada = [
+    [37.8651, 23.7499], // La Casa Di Giorgino
+    [37.8578, 23.7537], // Pasiphae
+    [37.9085, 23.7752], // Mantri, Ano Glyfada
+    [37.8630, 23.7563], // To Drami
+    [37.8662, 23.7487], // Feedel Asador
+    [37.8600, 23.7526]  // The Greek
+  ];
+  makeMap('map-glyfada', [37.8750, 23.7580], 12, glyfada);
+
+  // Varkiza / Vari
+  var varkiza = [
+    [37.8228, 23.8003], // Bavaria
+    [37.8171, 23.8019], // Kastelorizo
+    [37.8159, 23.8013], // Latini
+    [37.8207, 23.8120]  // Aperando Galazio
+  ];
+  makeMap('map-varkiza', [37.8190, 23.8040], 13, varkiza);
+
+  // Athens detour: Vouliagmeni -> the starred rooms
+  var athens = [
+    [37.8121, 23.7826], // Vouliagmeni
+    [37.9391, 23.6915], // Delta, SNFCC
+    [37.9805, 23.7169], // CTC
+    [37.9768, 23.7229], // Makris, Thisio
+    [37.9670, 23.7431], // Soil, Pangrati
+    [37.9651, 23.7430]  // Spondi, Pangrati
+  ];
+  makeMap('map-athens', [37.8950, 23.7300], 11, athens);
+
+  // Beyond dinner: walkable Vouliagmeni centre
+  var beyond = [
+    [37.8132, 23.7823], // Artopolis
+    [37.8156, 23.7781], // Tanto Cafe
+    [37.8130, 23.7825], // Sofi's
+    [37.8115, 23.7827]  // Waffle House
+  ];
+  makeMap('map-beyond', [37.8135, 23.7810], 15, beyond);
+
+});
+</script>
+
+<script>
+/* ── Filter bar: auto-build area buttons, price/healthy toggles, live count, hide-on-scroll ── */
+(function(){
+  var bar=document.getElementById('filterbar'),countEl=document.getElementById('fbCount'),citiesRow=document.getElementById('fbCities');
+  if(!bar||!countEl||!citiesRow) return;
+  var sections=[].slice.call(document.querySelectorAll('section.section[data-area]'));
+  if(!sections.length){bar.style.display='none';return;}
+  var areas=[];
+  sections.forEach(function(s){var a=s.getAttribute('data-area'),t=s.querySelector('.section-title');var label=t?t.textContent.trim():a;if(!areas.some(function(x){return x.a===a;}))areas.push({a:a,label:label});});
+  var html='<button class="fb-btn fb-city active" data-city="all">All</button>';
+  areas.forEach(function(x){html+='<button class="fb-btn fb-city" data-city="'+x.a+'">'+x.label+'</button>';});
+  citiesRow.innerHTML=html;
+  if(areas.length<2) citiesRow.style.display='none';
+  var cuisRow=document.getElementById('fbCuisines'),cuis=[];
+  sections.forEach(function(s){[].slice.call(s.querySelectorAll('.card[data-cuisine]')).forEach(function(c){var cu=c.getAttribute('data-cuisine');if(cu&&cuis.indexOf(cu)===-1)cuis.push(cu);});});
+  if(cuisRow){var ch='';cuis.sort().forEach(function(cu){ch+='<button class="fb-btn fb-cuisine" data-cuisine="'+cu+'">'+cu.charAt(0).toUpperCase()+cu.slice(1)+'</button>';});cuisRow.innerHTML=ch;if(cuis.length<2)cuisRow.style.display='none';}
+  var state={city:'all',price:null,healthy:false,cuisine:null};
+  function apply(){var shown=0;sections.forEach(function(sec){var cityOk=(state.city==='all')||(sec.getAttribute('data-area')===state.city);sec.style.display=cityOk?'':'none';if(!cityOk)return;[].slice.call(sec.querySelectorAll('.card[data-price]')).forEach(function(card){var pOk=(state.price===null)||(card.getAttribute('data-price')===state.price);var hOk=(!state.healthy)||(card.getAttribute('data-healthy')==='1');var cOk=(state.cuisine===null)||(card.getAttribute('data-cuisine')===state.cuisine);var vis=pOk&&hOk&&cOk;card.style.display=vis?'':'none';if(vis)shown++;});});countEl.textContent=shown+' shown';}
+  bar.addEventListener('click',function(e){var b=e.target.closest?e.target.closest('.fb-btn'):null;if(!b)return;
+    if(b.classList.contains('fb-city')){state.city=b.getAttribute('data-city');[].slice.call(bar.querySelectorAll('.fb-city')).forEach(function(x){x.classList.toggle('active',x===b);});window.scrollTo({top:0,behavior:'smooth'});}
+    else if(b.classList.contains('fb-price')){var p=b.getAttribute('data-price');if(state.price===p){state.price=null;b.classList.remove('active');}else{state.price=p;[].slice.call(bar.querySelectorAll('.fb-price')).forEach(function(x){x.classList.toggle('active',x===b);});}}
+    else if(b.classList.contains('fb-healthy')){state.healthy=!state.healthy;b.classList.toggle('active',state.healthy);}
+    else if(b.classList.contains('fb-cuisine')){var cu=b.getAttribute('data-cuisine');if(state.cuisine===cu){state.cuisine=null;b.classList.remove('active');}else{state.cuisine=cu;[].slice.call(bar.querySelectorAll('.fb-cuisine')).forEach(function(x){x.classList.toggle('active',x===b);});}}
+    apply();});
+  var lastY=0;window.addEventListener('scroll',function(){var y=window.pageYOffset||document.documentElement.scrollTop;if(y>140&&y>lastY)bar.classList.add('fb-hidden');else bar.classList.remove('fb-hidden');lastY=y;},{passive:true});
+  /* closed-today: device-local day/time; only ever shows "closed"/"opens" when data says so — never falsely "open" */
+  (function(){var now=new Date(),day=now.getDay(),mins=now.getHours()*60+now.getMinutes();
+    [].slice.call(document.querySelectorAll('.card')).forEach(function(card){var badges=card.querySelector('.card-badges');if(!badges)return;
+      var cd=(card.getAttribute('data-closed-days')||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+      if(cd.indexOf(String(day))!==-1){var b=document.createElement('span');b.className='badge badge-closed';b.textContent='Closed today';badges.appendChild(b);return;}
+      var of=card.getAttribute('data-open-from');if(of){var p=of.split(':'),om=(+p[0])*60+(+(p[1]||0));if(mins<om){var b2=document.createElement('span');b2.className='badge badge-soon';b2.textContent='Opens '+of;badges.appendChild(b2);}}
+    });})();
+  apply();
+})();
+/* ── PWA: register the network-first service worker ── */
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});}
+</script>
+</body>
+</html>
